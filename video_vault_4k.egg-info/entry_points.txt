@@ -1,0 +1,3 @@
+[console_scripts]
+video-vault = video_vault.cli:main
+vv4k = video_vault.cli:main

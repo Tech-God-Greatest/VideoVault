@@ -1,0 +1,392 @@
+# Video Vault 4K
+
+<div align="center">
+
+[![CI](https://github.com/lakshit/video-vault-4k/actions/workflows/ci.yml/badge.svg)](https://github.com/lakshit/video-vault-4k/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![Platform](https://img.shields.io/badge/platform-windows%20%7C%20linux%20%7C%20macos-lightgrey.svg)](https://github.com/lakshit/video-vault-4k)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+
+**Universal File/Folder to 4K Video Lossless Binary Data Vault**
+
+*Turn arbitrary digital files into 100% bit-for-bit lossless 4K video files where physical pixels are the storage medium.*
+
+[Key Features](#key-features) • [Installation](#installation) • [Desktop GUI](#desktop-gui) • [CLI Usage](#command-line-interface-cli) • [Python API](#python-api) • [Benchmarks](#codec-performance-comparison-4k-uhd) • [Contributing](#contributing)
+
+</div>
+
+---
+
+## Overview
+
+**Video Vault 4K** is a high-performance Python application and custom binary container format that converts **arbitrary digital files and folders** into standard 4K video files that act as **100% bit-for-bit lossless data containers**.
+
+The video is not meant to visually represent the files: **the pixels themselves are the physical storage medium**. Every video frame stores raw digital data across the full 8-bit RGBA, RGB24, or Luma color space, appearing as uniform high-entropy visual static noise.
+
+```
+       ┌────────────────────────┐
+       │ Any File / Folder Data │
+       └───────────┬────────────┘
+                   │
+                   ▼
+       ┌────────────────────────┐
+       │   Streaming Tar Pack   │  (Preserves structure, mtime, permissions)
+       └───────────┬────────────┘
+                   │
+                   ▼
+       ┌────────────────────────┐
+       │  AES-256 / Whitening   │  (Maximal Shannon entropy ~ 8.0 bits/byte)
+       └───────────┬────────────┘
+                   │
+                   ▼
+       ┌────────────────────────┐
+       │  VAULT4K Frame Wrapper │  (80-byte header: CRC32, SHA-256, Salt)
+       └───────────┬────────────┘
+                   │
+                   ▼
+       ┌────────────────────────┐
+       │    4K Lossless Video   │  (MP4 / AVI / MKV - Native Playback)
+       └────────────────────────┘
+```
+
+---
+
+## Table of Contents
+
+- [Key Features](#key-features)
+- [Architecture](#architecture)
+- [Installation](#installation)
+- [Desktop GUI](#desktop-gui)
+- [Command-Line Interface (CLI)](#command-line-interface-cli)
+  - [1. Encode Files / Folders](#1-encode-files--folders)
+  - [2. Decode & Reconstruct](#2-decode--reconstruct)
+  - [3. Verify Integrity (Without Extracting)](#3-verify-integrity-without-extracting)
+  - [4. Inspect Metadata & Manifest](#4-inspect-metadata--manifest)
+- [Python API](#python-api)
+- [Codec Performance Comparison (4K UHD)](#codec-performance-comparison-4k-uhd)
+- [Binary Protocol Specification](#binary-protocol-specification)
+- [Project Structure](#project-structure)
+- [Running Automated Tests](#running-automated-tests)
+- [Contributing](#contributing)
+- [Security](#security)
+- [License](#license)
+
+---
+
+## Key Features
+
+* **Universal Packaging**:
+  * Ingests single files, multi-file selections, or complete directories.
+  * Recursively packages folder trees, preserving directory structure, empty folders, modification timestamps (`mtime`), POSIX permissions, and unicode/special character filenames (`測試 🚀 & symbols.bin`).
+* **100% Bit-for-Bit Lossless Storage**:
+  * Guarantees exact byte reconstruction: `original bytes == decoded bytes`.
+  * Integrates lossless video codecs via high-throughput FFmpeg streaming pipes:
+    * **Microsoft MP4 Universal (`.mp4`)**: Lossless H.264 video natively supported and played by Windows Media Player, Movies & TV, Windows 11 Media Player, Edge, QuickTime, iOS, and Android.
+    * **Microsoft AVI Lossless (`.avi`)**: Native Microsoft DIB bitmap container playable directly in Windows Media Player.
+    * **FFV1 Level 3 in MKV**: Archival preservation standard (IETF RFC 9043) with intra-slice CRCs.
+    * **Rawvideo in MKV / AVI**: Ultra-fast direct bit-for-bit storage (**250–370+ MB/s** throughput).
+    * **Lossless PNG in MKV**: Per-frame lossless PNG intra-compression.
+    * **HuffYUV in AVI**: Fast intra-frame lossless codec.
+* **4K UHD Pixel Storage Capacity**:
+  * **RGBA Mode (4 bytes/pixel)**: $3840 \times 2160 \times 4 =$ **$33,177,600$ bytes ($\sim 31.64$ MB) per frame**.
+  * **RGB24 / BGR24 Mode (3 bytes/pixel)**: $3840 \times 2160 \times 3 =$ **$24,883,200$ bytes ($\sim 23.73$ MB) per frame**.
+  * **MP4 Luma Mode (1 byte/pixel)**: $3840 \times 2160 \times 1 =$ **$8,294,400$ bytes ($\sim 7.91$ MB) per frame** (Microsoft Native).
+* **`VAULT4K` Self-Describing Binary Protocol**:
+  * Fixed 80-byte frame header with per-frame sequence index, payload size, CRC32, salt, and SHA-256 digests.
+  * Frame 0 contains the Global Vault Header (`VLT_META`) with format version, creation timestamp, container parameters, and comprehensive per-file manifest.
+* **Security & Visual Appearance**:
+  * **AES-256-GCM AEAD Encryption**: Optional military-grade encryption with PBKDF2 key derivation and unique per-frame nonces.
+  * **Stream Whitening**: In unencrypted mode, hardware-accelerated AES-CTR whitening ensures maximal Shannon entropy ($\sim 8.0$ bits/byte), eliminating visible headers and patterns and displaying pure colorful television static.
+* **Streaming Architecture for Arbitrary Datasets**:
+  * Streaming POSIX PAX tar packaging and extraction. Constant memory footprint ($<100$ MB RAM) regardless of dataset size (from tiny 1-byte files to 100+ GB datasets).
+* **Corruption Pinpointing**:
+  * Hierarchical verification: Frame Header CRC32 $\rightarrow$ Frame Payload CRC32/SHA-256 $\rightarrow$ Per-file Manifest SHA-256. Pinpoints exact corrupted frames, timestamps, and files.
+* **Dual Modern Interfaces**:
+  * **Polished Desktop GUI (PyQt6)**: Sleek dark mode interface with drag-and-drop, real-time speed & FPS gauges, live visual frame static thumbnail, pause/resume/cancel controls, and reconstruction reports.
+  * **CLI Mode**: Scriptable command-line interface with subcommands: `encode`, `decode`, `verify`, `info`, and `gui`.
+
+---
+
+## Architecture
+
+```
+[ Input Files & Folders ]
+           │
+           ▼
+[ Streaming Tar Packager ]  ──► Builds Manifest (Paths, Sizes, SHA-256)
+           │ (Streaming Chunks)
+           ▼
+[ AES-256-GCM / Whitening ]  ──► Transforms into High-Entropy Static
+           │
+           ▼
+[ VAULT4K Frame Envelope ]   ──► Adds 80-Byte Header (CRC32, SHA-256, Salt)
+           │
+           ▼
+[ FFmpeg Lossless Writer ]  ──► Pipes Frames to H.264 / FFV1 / Rawvideo
+           │
+           ▼
+[ 4K Lossless Video (.mp4 / .mkv / .avi) ] (Physical-looking Static Medium)
+           │
+           ▼
+[ FFmpeg Lossless Reader ]  ──► Pipes Frames to Decoder
+           │
+           ▼
+[ Frame Validation & CRC ]  ──► Detects Frame Corruption / Missing Frames
+           │
+           ▼
+[ Decryption & Unwhitening ]
+           │
+           ▼
+[ Streaming Unpacker ]      ──► Restores Files, Directories & Timestamps
+           │
+           ▼
+[ Manifest Verification ]   ──► Compares Decoded SHA-256 == Original SHA-256
+```
+
+---
+
+## Installation
+
+### Prerequisites
+- Python 3.10 or higher
+- Windows, Linux, or macOS
+- FFmpeg (automatically bundled via `imageio-ffmpeg` or detected on system `PATH` / `VIDEO_VAULT_FFMPEG`)
+
+### Option 1: Install from Source
+```bash
+git clone https://github.com/lakshit/video-vault-4k.git
+cd video-vault-4k
+pip install -e .
+```
+
+### Option 2: Install with Development Dependencies
+```bash
+pip install -e ".[dev]"
+```
+
+Once installed, the CLI tools `video-vault` and `vv4k` will be available in your terminal.
+
+---
+
+## Desktop GUI
+
+Launch the desktop GUI:
+
+```bash
+video-vault gui
+# or
+python run.py gui
+```
+
+### Features:
+1. **Encode Tab**:
+   - Drag and drop files or folders directly into the queue.
+   - Choose codec: **Microsoft MP4 (Universal)**, **Rawvideo (Max Speed)**, or **FFV1 (Archival)**.
+   - Optional AES-256-GCM encryption password.
+   - Real-time throughput gauge (MB/s, FPS, elapsed time, ETA).
+   - Live **4K Static Noise Thumbnail** updated as frames are encoded.
+   - Pause, resume, and cancel buttons.
+2. **Decode Tab**:
+   - Drop any encoded video file.
+   - Immediate **Automatic Container Probe** reads Frame 0 and previews contained files, sizes, creation dates, and encryption status.
+   - Enter password if encrypted and choose target extraction folder.
+   - Full **Bit-for-Bit Verification Table** confirming all extracted files against original SHA-256 hashes.
+3. **Verify Tab**:
+   - Fast integrity check verifying all frame headers, CRC32, and SHA-256 digests without unpacking files to disk.
+
+---
+
+## Command-Line Interface (CLI)
+
+Video Vault 4K provides a scriptable CLI:
+
+### 1. Encode Files / Folders
+
+```bash
+# Encode folder into Microsoft Windows Media Player compatible MP4
+video-vault encode ./my_folder -o vault_ms.mp4 --ms-player
+
+# Encode folder to 4K video using FFV1 Archival codec
+video-vault encode ./my_folder -o vault_archive.mkv
+
+# High-speed encoding with Rawvideo and AES-256-GCM password
+video-vault encode ./dataset -o vault_encrypted.mkv --codec rawvideo --password "SecretPass123!"
+
+# Multiple inputs with RGB24 mode
+video-vault encode file1.pdf file2.zip ./docs -o vault_multi.mkv --rgb
+```
+
+### 2. Decode & Reconstruct
+
+```bash
+# Decode video and restore all files (automatically detects MP4, AVI, or MKV)
+video-vault decode vault_ms.mp4 -o ./restored_files
+video-vault decode vault_archive.mkv -o ./restored_files
+
+# Decode encrypted video
+video-vault decode vault_encrypted.mkv -o ./restored_files --password "SecretPass123!"
+```
+
+### 3. Verify Integrity (Without Extracting)
+
+```bash
+# Scan container and validate all frame CRC32 and SHA-256 digests
+video-vault verify vault_ms.mp4
+```
+
+### 4. Inspect Metadata & Manifest
+
+```bash
+# Inspect container parameters and view complete file manifest
+video-vault info vault_ms.mp4
+```
+
+---
+
+## Python API
+
+You can also use Video Vault 4K directly within your Python scripts:
+
+```python
+from video_vault.core.config import StreamConfig
+from video_vault.core.packager import StreamingPackager
+from video_vault.core.framing import FrameEnvelope
+from video_vault.core.video_backend import LosslessVideoWriter, LosslessVideoReader
+from video_vault.core.unpacker import StreamingUnpacker
+
+# 1. Configure 4K UHD stream
+config = StreamConfig(
+    width=3840,
+    height=2160,
+    pixel_format="rgba",
+    codec="rawvideo",
+    container="mkv",
+)
+
+# 2. Encode files to video
+# (See video_vault.cli for high-level pipeline automation)
+```
+
+---
+
+## Codec Performance Comparison (4K UHD)
+
+| Codec | Container | MS Media Player Support | Encode Speed | Decode Speed | Capacity / Frame |
+|---|---|---|---|---|---|
+| **Microsoft MP4** (`libx264 -crf 0`) | `.mp4` | **Native (Windows Media Player, Movies & TV)** | **50–80 MB/s** | **80–120 MB/s** | **8.29 MB / frame** |
+| **Microsoft AVI** (`rawvideo DIB`) | `.avi` | **Native (Windows Media Player)** | **270–370 MB/s** | **200+ MB/s** | **24.88 – 33.18 MB** |
+| **Rawvideo MKV** | `.mkv` | Third-party / VLC / MPV | **270–370 MB/s** | **200+ MB/s** | **33.18 MB / frame** |
+| **FFV1 Level 3** | `.mkv` | Archival / VLC / MPV | **45–60 MB/s** | **18–20 MB/s** | **33.18 MB / frame** |
+| **Lossless PNG** | `.mkv` | Third-party / VLC / MPV | **38 MB/s** | **160 MB/s** | **33.18 MB / frame** |
+| **HuffYUV** | `.avi` | DirectShow / Third-party | **140 MB/s** | **60 MB/s** | **24.88 MB / frame** |
+
+*Note: For arbitrary compressed files, encrypted files, and archives (which already possess maximal Shannon entropy $\sim 8.0$ bits/byte), `Rawvideo` delivers the highest throughput with zero CPU compression overhead.*
+
+---
+
+## Binary Protocol Specification
+
+For full technical specifications on the byte layout, 80-byte header structure, Frame 0 metadata format, and cryptographic key derivation, please refer to:
+
+📖 **[Technical Format Specification](docs/FORMAT_SPECIFICATION.md)**
+
+---
+
+## Project Structure
+
+```
+video-vault-4k/
+├── .github/
+│   ├── ISSUE_TEMPLATE/
+│   │   ├── bug_report.yml       # Structured bug report template
+│   │   ├── feature_request.yml  # Structured feature request template
+│   │   └── config.yml           # Community links
+│   ├── workflows/
+│   │   ├── ci.yml               # Multi-OS matrix CI (Linux, Windows, macOS)
+│   │   └── release.yml          # Automated PyPI/GitHub release workflow
+│   └── PULL_REQUEST_TEMPLATE.md # PR guidelines and lossless checklist
+├── docs/
+│   └── FORMAT_SPECIFICATION.md  # Detailed VAULT4K binary protocol spec
+├── tests/
+│   ├── conftest.py              # Pytest fixtures and mock datasets
+│   ├── test_cli_and_4k.py       # Full 4K roundtrip and CLI command tests
+│   ├── test_corruption.py       # Tampering and truncation detection tests
+│   ├── test_crypto.py           # AES-256-GCM and whitening entropy tests
+│   ├── test_framing.py          # 80-byte header pack/unpack & CRC tests
+│   ├── test_microsoft_player.py # MP4 & AVI Windows Media Player tests
+│   ├── test_multiframe.py       # Multi-frame streaming continuity tests
+│   ├── test_packager.py         # Tar packager & unpacker streaming tests
+│   └── test_roundtrip.py        # End-to-end codec & encryption tests
+├── video_vault/
+│   ├── __init__.py              # Package version (1.0.0)
+│   ├── __main__.py              # python -m video_vault entry point
+│   ├── cli.py                   # Scriptable CLI interface
+│   ├── py.typed                 # PEP 561 type annotation marker
+│   ├── core/
+│   │   ├── config.py            # Stream configurations & presets
+│   │   ├── crypto.py            # AES-256-GCM AEAD & stream whitening
+│   │   ├── framing.py           # VAULT4K envelope & 80-byte binary header
+│   │   ├── packager.py          # Streaming POSIX PAX tar packager
+│   │   ├── unpacker.py          # Streaming unpacker & manifest verifier
+│   │   └── video_backend.py     # FFmpeg lossless pipe streaming & probe
+│   ├── gui/
+│   │   ├── __init__.py
+│   │   ├── main_window.py       # PyQt6 Dark theme GUI & worker threads
+│   │   └── static_preview.py    # Live 4K visual static thumbnail generator
+│   └── utils/
+│       ├── checksum.py          # High-speed CRC32 and SHA-256 helpers
+│       └── formatting.py        # Human-readable byte & speed formatters
+├── CHANGELOG.md                 # Version history (Keep a Changelog)
+├── CODE_OF_CONDUCT.md           # Contributor Covenant v2.1
+├── CONTRIBUTING.md              # Development & PR guidelines
+├── LICENSE                      # MIT License
+├── pyproject.toml               # PEP 517/621 packaging metadata
+├── README.md                    # Project documentation
+├── requirements.txt             # Direct dependencies
+├── run.py                       # Root launcher script
+├── SECURITY.md                  # Vulnerability reporting policy
+└── setup.py                     # Backward-compatible build shim
+```
+
+---
+
+## Running Automated Tests
+
+Run the full pytest suite:
+
+```bash
+pytest -v
+```
+
+The test suite validates:
+* True 4K UHD ($3840 \times 2160$) RGBA lossless round trip
+* Tiny files (10 bytes) and empty files (0 bytes)
+* Multi-megabyte binary files spanning multiple 4K frames
+* Deeply nested directory hierarchies and empty folders
+* Filenames with spaces, Unicode, emojis, and symbols (`測試 🚀 & symbols.bin`)
+* SHA-256 hash assertions before and after (`original_bytes == decoded_bytes`)
+* AES-256-GCM encryption, decryption, and wrong password rejection
+* Stream whitening Shannon entropy ($> 7.95$ bits/byte)
+* Intentional byte tampering and truncation detection
+* Microsoft Media Player MP4 universal compatibility and AVI DIB roundtrip
+* Full CLI command execution (`encode`, `decode`, `verify`, `info`)
+
+---
+
+## Contributing
+
+Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct, development setup, and pull request submission process.
+
+---
+
+## Security
+
+For security vulnerability disclosure and cryptographic architecture details, see [SECURITY.md](SECURITY.md).
+
+---
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

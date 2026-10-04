@@ -1,0 +1,102 @@
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "video-vault-4k"
+version = "1.0.0"
+description = "Universal lossless data container that encodes arbitrary digital files into 4K video files using pixel-level storage."
+readme = "README.md"
+authors = [
+    { name = "Video Vault 4K Contributors" }
+]
+license = { text = "MIT" }
+requires-python = ">=3.10"
+keywords = [
+    "video",
+    "container",
+    "lossless",
+    "storage",
+    "steganography",
+    "archive",
+    "encoder",
+    "decoder",
+    "4k",
+    "ffmpeg",
+    "pyqt6",
+    "aes-256",
+    "cold-storage"
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: End Users/Desktop",
+    "Intended Audience :: System Administrators",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Natural Language :: English",
+    "Operating System :: OS Independent",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security :: Cryptography",
+    "Topic :: System :: Archiving",
+    "Topic :: System :: Archiving :: Backup",
+    "Topic :: Multimedia :: Video",
+    "Topic :: Multimedia :: Video :: Conversion",
+]
+dependencies = [
+    "numpy>=1.24.0",
+    "imageio-ffmpeg>=0.5.0",
+    "PyQt6>=6.5.0",
+    "cryptography>=41.0.0",
+    "tqdm>=4.65.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "ruff>=0.3.0",
+    "black>=24.0.0",
+    "build>=1.0.0",
+    "twine>=5.0.0",
+]
+
+[project.scripts]
+video-vault = "video_vault.cli:main"
+vv4k = "video_vault.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/lakshit/video-vault-4k"
+Repository = "https://github.com/lakshit/video-vault-4k"
+Documentation = "https://github.com/lakshit/video-vault-4k#readme"
+"Bug Tracker" = "https://github.com/lakshit/video-vault-4k/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["video_vault*"]
+
+[tool.setuptools.package-data]
+video_vault = ["py.typed"]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra -q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]
+
+[tool.black]
+line-length = 100
+target-version = ['py310']
